@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html ng-app="ksgbiblio">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        
+        <title>こすぎ朝学ビブリオバトルタイマー</title>
+        
+        <meta name="keywords" content="ビブリオバトル,タイマー,武蔵小杉" />
+        <meta name="description" content="こすぎ朝学ビブリオバトルタイマー" />
+        <meta property="og:site_name" content="こすぎ朝学ビブリオバトルタイマー">
+        <meta property="og:title" content="こすぎ朝学ビブリオバトルタイマー">
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="http://timer.kawasaki-biblio.com">
+        <meta property="og:description" content="こすぎ朝学ビブリオバトルタイマー">
+        <meta property="og:image" content="http://timer.kawasaki-biblio.com/icon.jpg">
+        
+        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+        <link rel="apple-touch-icon-precomposed" href="icon.jpg">
+        
+        <style>
+            html {
+                position: relative;
+                min-height: 100%;
+            }
+
+            #application {
+                min-height: 100%;
+            }
+            
+            #settings {
+                margin-top: 60px;
+            }
+            
+            #document {
+                margin-top: 20px;
+            }
+            
+            #share {
+                margin: 0 auto;
+                padding: 20px 0;
+            }
+            
+            #share ul {
+                display: table;
+                margin: 0 auto;
+            }
+            
+            #share ul li {
+                display: table-cell;
+                vertical-align: middle;
+            }
+            
+            #footer {
+                bottom: 0;
+                margin-top: 40px;
+                width: 100%;
+                height: 60px;
+            }
+            
+            #fullscreen {
+                background-color: #fff;
+                width: 100%;
+                height: 100%;
+            }
+            
+            #fullscreen-nav {
+                position: absolute;
+                top: 0;
+                right: 0;
+            }
+            
+            .container {
+                width: auto;
+                max-width: 680px;
+                padding: 0 15px;
+            }
+            
+            .container .text-muted {
+                margin: 20px 0;
+            }
+            
+            .timer {
+                margin: 0 auto;
+                padding: 0;
+                text-align: center;
+            }
+
+            .phase {
+                margin 0 auto;
+                text-align: center;
+            }
+            
+            .twitter-follow {
+                margin-top: 20px;
+            }
+            
+
+            .facebook-like-box {
+                margin-top: 20px;
+            }
+            
+            .fb-like-box {
+                margin: 0 auto;
+            }
+            
+            .fb-like-box,
+            .fb-like-box span,
+            .fb-like-box iframe[style] {
+                width: 100%!important;
+                max-width: 520px!important;
+            }
+        </style>
+
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+        <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.5.5/angular.min.js"></script>
+        <script src="//netdna.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+
+        <script>
+            angular.module('ksgbiblio', [])
+                .service('Timer', ['$timeout', function ($timeout) {
+                    this.timer = null,
+                        
+                    this.interval = function (func) {
+                        var that = this,
+                            startTime = Date.now(),
+                            tick = function () {
+                                var msec = Date.now() - startTime;
+                                if (func(Math.floor(msec / 1000))) {
+                                    that.timer = $timeout(tick, 1000 - (msec % 1000));
+                                }
+                            };
+                        tick();
+                    };
+                        
+                    this.stop = function () {
+                        if (this.timer) {
+                            $timeout.cancel(this.timer);
+                            this.timer = null;
+                        }
+                    };
+                }])
+            
+                .service('Phase', function() {
+                    this.READY = 'READY';
+                    this.PRESENTATION = 'PRESENTATION';
+                    this.DISCUSSION = 'DISCUSSION';
+
+                    this.state = null;
+      
+                    this.reset = function () {
+                        this.state = this.READY;
+                    };
+      
+                    this.next = function () {
+                        switch (this.state) {
+                            case this.READY:
+                                this.state = this.PRESENTATION;
+                                break;
+                            case this.PRESENTATION:
+                                this.state = this.DISCUSSION;
+                                break;
+                            case this.DISCUSSION:
+                                this.state = this.READY;
+                                break;
+                            default:
+                                break;
+                        }
+                        return this.state;
+                    };
+                })
+            
+                .filter('zeropad', function () {
+                    return function (input) {
+                        if (angular.isNumber(input) && input < 10) {
+                            input = '0' + input;
+                        }
+                        return input;
+                    };
+                })
+            
+                .controller('TimerController', ['$scope', '$window', 'Timer', 'Phase', function ($scope, $window, Timer, Phase) {
+                    var presentationTime = 0,
+                        discussionTime = 0;
+
+                    $scope.presentations = [
+                        { time: 3, label: "3分" },
+                        { time: 5, label: "5分" }
+                    ];
+                    
+                    $scope.discussions = [
+                        { time: 2, label: "2分" },
+                        { time: 3, label: "3分" }
+                    ];
+                    
+                    $scope.presentationTime = 5;
+                    $scope.discussionTime = 3;
+    
+                    $scope.fullscreenEnabled = (
+                        document.fullscreenEnabled ||
+                        document.webkitFullscreenEnabled ||
+                        document.mozFullScreenEnabled ||
+                        document.msFullscreenEnabled
+                    );
+
+                    var reset = function () {
+                        Phase.reset();
+                        Timer.stop();
+                        $scope.min = $scope.presentationTime;
+                        $scope.sec = 0;
+                    };
+
+                    var render = function () {
+                        switch (Phase.state) {
+                            case Phase.READY:
+                                $scope.buttonText = 'スタート';
+                                $scope.infoText = '準備ができたら「スタート」を押してください';
+                                $scope.min = $scope.presentationTime;
+                                $scope.sec = 0;
+                                $scope.progress = 0;
+                                $scope.timerClass = 'text-muted';
+                                $scope.progressClass = 'progress-bar-info';
+                                break;
+                                
+                            case Phase.PRESENTATION:
+                                $scope.buttonText = '紹介を止める';
+                                $scope.infoText = '本の紹介をしてください';
+                                $scope.timerClass = '';
+
+                                Timer.interval(function (sec) {
+                                    var maxSec = $scope.presentationTime * 60;
+                                    var remSec = maxSec - sec;
+                                    
+                                    $scope.min = Math.floor(remSec / 60);
+                                    $scope.sec = remSec % 60;
+                                    $scope.progress = Math.floor(remSec / maxSec * 100);
+                                    
+                                    renderProgressBar();
+                                    
+                                    // 残り２分に個性が出てくる
+                                    if (120 > remSec && remSec > 20) {
+                                        $scope.progressClass = 'progress-bar-warning';
+                                    }
+                                    else if (remSec <= 20) {
+                                        $scope.timerClass = 'text-danger';
+                                        $scope.progressClass = 'progress-bar-danger';
+                                        $scope.infoText = 'あきらめないで！最後まで話しきりましょう！';
+                                    }
+                                    if (remSec <= 0) {
+                                        next();
+                                        return false;
+                                    }
+                                    return true;
+                                });
+                                break;
+                                
+                            case Phase.DISCUSSION:
+                                $scope.buttonText = "リセット";
+                                $scope.infoText = 'ディスカッションしてください';
+                                $scope.timerClass = '';
+                                $scope.progressClass = 'progress-bar-success';
+                                $scope.progress = 0;
+                                
+                                Timer.interval(function (sec) {
+                                    var maxSec = $scope.discussionTime * 60;
+                                    
+                                    $scope.min = Math.floor(sec / 60);
+                                    $scope.sec = sec % 60;
+                                    $scope.progress = Math.floor(sec / maxSec * 100);
+                                    
+                                    if ($scope.progress > 100) {
+                                        $scope.progress = 100;
+                                    }
+                                    
+                                    renderProgressBar();
+
+                                    if (sec >= maxSec) {
+                                        $scope.infoText = 'ディスカッションを終了してください';
+                                    }
+                                    
+                                    return true;
+                                });
+                                break;
+                                
+                            default:
+                                break;
+                        }
+                        
+                        setFontSize();
+                        renderProgressBar();
+                    };
+
+                    var next = function() {
+                        if (Phase.next() == Phase.READY) {
+                            reset();
+                        }
+                        Timer.stop();
+                        render();
+                    };
+
+                    var setFontSize = function () {
+                        $('.timer').css({
+                            'font-size': $window.innerWidth / 3.5 + 'px'
+                        });
+                    };
+
+                    var renderProgressBar = function () {
+                        $('.progress-bar').css({
+                            width: $scope.progress + '%'
+                        });
+                    };
+
+                    var exitFullscreen = function () {
+                        var elm = $('#fullscreen').get(0),
+                            requestFullscreen = [
+                                'requestFullscreen',
+                                'webkitRequestFullScreen',
+                                'mozRequestFullScreen',
+                                'msRequestFullscreen'
+                            ];
+                        
+                        for (var i = 0; i < requestFullscreen.length; i++) {
+                            if (elm[requestFullscreen[i]]) {
+                                elm[requestFullscreen[i]]();
+                                break;
+                            }
+                        }
+                        
+                        $scope.fullscreenNavIcon = 'glyphicon glyphicon-resize-full';
+                    }
+
+                    angular.element($window).bind('resize', function () {
+                        setFontSize();
+                    });
+
+                    $scope.next = function () {
+                        next();
+                    };
+
+                    $scope.reset = function() {
+                        reset();
+                        render();
+                    };
+
+                    $scope.isPhaseReady = function () {
+                        return Phase.state == Phase.READY;
+                    };
+
+                    $scope.fullscreen = function () {
+                        var elm = $('#fullscreen').get(0),
+                            requestFullscreen = [
+                                'requestFullscreen',
+                                'webkitRequestFullScreen',
+                                'mozRequestFullScreen',
+                                'msRequestFullscreen'
+                            ];
+
+                        for (var i=0; i < requestFullscreen.length; i++) {
+                            if (elm[requestFullscreen[i]]) {
+                                elm[requestFullscreen[i]]();
+                                break;
+                            }
+                        }
+                    }
+
+                    reset();
+                    render();
+                }]);
+        </script>
+        
+        <script>
+            (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+            (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+            m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+            })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+            ga('create', 'UA-49272309-1', 'auto');
+            ga('send', 'pageview');
+        </script>
+    </head>
+    
+    <body>
+        <noscript>
+            <div id="ie" class="alert alert-danger">JavaScriptを有効にしてください。</div>
+        </noscript>
+
+        <!--[if lte IE 8]>
+        <div id="ie" class="alert alert-danger">
+            あなたがお使いのブラウザでの閲覧は推奨していません。<br>
+            <a href="http://browsehappy.com/">ブラウザの乗換えをおすすめします。</a>
+        </div>
+        <![endif]-->
+        
+        <div id="application" ng-controller="TimerController">
+            <div id="fullscreen-nav" ng-show="fullscreenEnabled">
+                <a href="#" class="btn btn-link" ng-click="fullscreen()">
+                    <i class="glyphicon glyphicon-resize-full"></i>
+                </a>
+            </div>
+            
+            <div id="fullscreen">
+                <div class="timer" ng-class="timerClass">{{min|zeropad}}:{{sec|zeropad}}</div>
+                <div class="text-center">{{infoText}}</div>
+                <div class="progress progress-striped active">
+                    <div
+                         class="progress-bar"
+                         ng-class="progressClass"
+                         aria-valuenow="{{progress}}"
+                         aria-valuemin="0"
+                         aria-valuemax="100">
+                    </div>
+                </div>
+                
+                <div class="phase">
+                    <a class="btn btn-default btn-lg" href="javascript:void(0);" ng-click="next()">{{buttonText}}</a>
+                </div>
+            </div>
+            
+            <form id="settings" class="form-horizontal" ng-submit="reset()">
+                <div class="container">
+                    <div class="form-group">
+                        <label for="presentationTime" class="col-sm-4 control-label">紹介時間</label>
+                        <div class="col-sm-8">
+                            <select
+                                    id="presentationTime"
+                                    class="form-control"
+                                    ng-model="presentationTime"
+                                    ng-options="opts.time as opts.label for opts in presentations"
+                                    ng-change="reset()"
+                                    ng-disabled="!isPhaseReady()">
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="discussionTime" class="col-sm-4 control-label">ディスカッション時間</label>
+                        <div class="col-sm-8">
+                            <select
+                                    id="discussionTime"
+                                    class="form-control"
+                                    ng-model="discussionTime"
+                                    ng-options="opts.time as opts.label for opts in discussions"
+                                    ng-change="reset()"
+                                    ng-disabled="!isPhaseReady()">
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+        
+        <div id="share">
+            <ul class="list-inline">
+                <li>
+                    <div class="fb-share-button" data-href="http://timer.kawasaki-biblio.com/" data-type="box_count"></div>
+                </li>
+                <li>
+                    <div class="g-plusone" data-size="tall"></div>
+                </li>
+                <li>
+                    <a href="https://twitter.com/share" class="twitter-share-button" data-via="asagaku_ksg" data-lang="ja" data-hashtags="bibliobattle" data-count="vertical">ツイート</a>
+                    <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+                </li>
+            </ul>
+            
+            <div class="container">
+                <div class="row">
+                    <div class="col-sm-6">
+                        <div class="facebook-like-box">
+                            <div class="fb-like-box" data-href="https://www.facebook.com/asagaku.ksg" data-height="400" data-colorscheme="light" data-show-faces="true" data-header="true" data-stream="false" data-show-border="true"></div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="twitter-follow text-center">
+                            <a class="twitter-timeline" href="https://twitter.com/asagaku_ksg" data-widget-id="447288956049051649">@asagaku_ksg からのツイート</a>
+                            <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="document" class="container">
+            <h1 class="text-center">こすぎ朝学ビブリオバトルタイマー</h1>
+            <p><a href="http://www.bibliobattle.jp/" target="_blank">ビブリオバトル</a>専用タイマーです。</p>
+            <p><a href="https://www.facebook.com/asagaku.ksg" target="_blank">こすぎ朝学</a>では定期的にビブリオバトルを開催しています。ぜひ遊びに来てください。</p>
+
+            <h3>操作説明</h3>
+            <ol>
+                <li>「スタート」ボタンを押すとカウントダウンが始まります。本の紹介をしてください。</li>
+                <li>カウントダウンが終了すると、自動的にディスカッション時間のカウントが始まります。</li>
+                <li>ディスカッションのタイマーは自動的に停止しません。ディスカッションが終わったら「リセット」ボタンを押してください。</li>
+            </ol>
+
+            <h3>ビブリオバトル公式ルール</h3>
+            <ol>
+                <li>発表参加者が読んで面白いと思った本を持って集まる。</li>
+                <li>順番に一人５分間で本を紹介する。</li>
+                <li>それぞれの発表の後に参加者全員でその発表に関するディスカッションを２～３分行う。</li>
+                <li>全ての発表が終了した後に「どの本が一番読みたくなったか？」を基準とした投票を参加者全員一票で行い,最多票を集めたものを『チャンプ本』とする。</li>
+            </ol>
+        </div>
+        
+        <div id="footer">
+            <div class="container">
+                <p class="text-muted text-center">Powered By <a href="https://www.facebook.com/asagaku.ksg" target="_blank">こすぎ朝学</a></p>
+            </div>
+        </div>
+        
+        <div id="fb-root"></div>
+        <script>
+            (function(d, s, id) {
+                var js, fjs = d.getElementsByTagName(s)[0];
+                if (d.getElementById(id)) return;
+                js = d.createElement(s); js.id = id;
+                js.src = "//connect.facebook.net/ja_JP/all.js#xfbml=1&appId=1421845761397413";
+                fjs.parentNode.insertBefore(js, fjs);
+            }(document, 'script', 'facebook-jssdk'));
+        </script>
+        
+        <script type="text/javascript">
+            window.___gcfg = {lang: 'ja'};
+
+            (function() {
+                var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+                po.src = 'https://apis.google.com/js/platform.js';
+                var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+            })();
+        </script>
+    </body>
+</html>
